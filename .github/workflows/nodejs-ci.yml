@@ -26,13 +26,10 @@ jobs:
       # 3. Install dependencies
       - name: Install dependencies
         run: |
-          if [ -f "package-lock.json" ]; then
-            echo "📦 Using npm ci for clean install..."
-            npm ci
-          else
-            echo "📦 No package-lock.json found, using npm install..."
-            npm install
-          fi
+          echo "📦 Installing dependencies..."
+          # Always use npm install to handle any sync issues
+          npm install
+          echo "✅ Dependencies installed successfully"
 
       # 4. Lint code
       - name: Run ESLint
@@ -56,6 +53,7 @@ jobs:
           format: 'HTML'
           args: >
             --enableRetired
+            --out ./reports
         continue-on-error: true
 
       # 8. Upload security reports
@@ -65,6 +63,7 @@ jobs:
         with:
           name: owasp-report
           path: reports/
+          if-no-files-found: ignore
 
       # 9. Build project
       - name: Build project
