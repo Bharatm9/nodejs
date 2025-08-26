@@ -21,15 +21,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+          # Disable cache initially to avoid corruption
+          cache: ''
 
       # 3. Install dependencies
       - name: Install dependencies
         run: |
           echo "📦 Installing dependencies..."
-          # Always use npm install to handle any sync issues
-          npm install
-          echo "✅ Dependencies installed successfully"
+          # Clear npm cache to avoid corruption issues
+          npm cache clean --force
+          # Install with retry mechanism and clean cache
+          for i in {1..3}; do
+            echo "Attempt $i of 3..."
+            if npm install --prefer-offline --no-audit --progress=false; then
+              echo "✅ Dependencies installed successfully"
+              break
+            else
+              echo "❌ Attempt $i failed, retrying..."
+              npm cache clean --force
+              rm -rf node_modules package-lock.json
+              sleep 5
+            fi
+            if [ $i -eq 3 ]; then
+              echo "💥 All attempts failed"
+              exit 1
+            fi
+          done
 
       # 4. Lint code
       - name: Run ESLint
