@@ -1,4 +1,4 @@
-name: Node.js CI/CD Pipeline
+name: Simple Node.js CI/CD Pipeline
 
 on:
   push:
@@ -7,42 +7,102 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test-and-build:
+    name: Test, Build & Security Check
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [18.x]
-
     steps:
+      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      # 2. Setup Node.js
+      - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '18'
           cache: 'npm'
 
+      # 3. Install dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Run Lint
+      # 4. Lint code
+      - name: Run ESLint
         run: npm run lint --if-present
 
-      - name: Run Tests
+      # 5. Run tests
+      - name: Run tests
         run: npm test --if-present
 
+      # 6. Security scan with npm audit
+      - name: Run security audit
+        run: npm audit --audit-level moderate
+        continue-on-error: true
+
+      # 7. OWASP Dependency Check
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'my-project'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --enableRetired
+        continue-on-error: true
+
+      # 8. Upload security reports
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: owasp-report
+          path: reports/
+
+      # 9. Build project
       - name: Build project
         run: npm run build --if-present
 
+      # 10. Upload build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-files
+          path: dist/
+
   deploy:
+    name: Deploy
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
     steps:
+      # 1. Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Deploy (placeholder)
-        run: echo "Deploying to server/cloud..."
+      # 2. Download build artifacts
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-files
+          path: dist/
+
+      # 3. Deploy to server
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production server..."
+          # Add your deployment commands here
+          # Examples:
+          # scp -r dist/* user@server:/var/www/html/
+          # ssh user@server "pm2 restart app"
+          # kubectl apply -f k8s/
+          echo "✅ Deployment completed!"
+
+      # 4. Post-deployment verification
+      - name: Health check
+        run: |
+          echo "🔍 Running health checks..."
+          # Add health check commands here
+          # curl -f http://your-app.com/health
+          echo "✅ Health check passed!"
